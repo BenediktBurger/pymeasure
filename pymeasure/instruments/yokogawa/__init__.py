@@ -23,4 +23,5 @@
 #
 
 from .yokogawa7651 import Yokogawa7651
+from .yokogawaAQ6370 import YokogawaAQ6370
 from .yokogawags200 import YokogawaGS200
