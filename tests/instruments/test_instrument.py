@@ -22,6 +22,7 @@
 # THE SOFTWARE.
 #
 
+import enum
 import time
 from unittest import mock
 
@@ -79,6 +80,61 @@ class NewRangeInstrument(GenericInstrument):
     fake_ctrl_values = (10, 20)
     fake_setting_values = (10, 20)
     fake_measurement_values = {'X': 4, 'Y': 5, 'Z': 6}
+
+
+class Modes(enum.Enum):
+    VOLTAGE = "MV"
+    CURRENT = "MC"
+
+
+class Enums:
+    class Test(enum.Enum):
+        ABC = "test"
+
+
+def enum_validator(value, values):
+    return f"{value.value}"
+
+
+class EnumInstrument(Instrument, Enums):
+
+    def __init__(self, adapter, *args, **kwargs):
+        super().__init__(adapter, "Test", *args, **kwargs)
+
+    class Options(enum.IntEnum):
+        ONE = 1
+        SEVEN = 7
+
+    class Status(enum.IntFlag):
+        POWER_SHORTAGE = 1
+        OVER_CURRENT = 2
+        INTERLOCK = 4
+
+    class Waveforms(enum.Enum):
+        FUNNY = "FY"
+        SINE = "sn"
+        TRIANGLE = "tr"
+
+    test = Instrument.measurement("T?", """Testing""", cast=Enums.Test)
+
+    mode = Instrument.control("M?", "M %s", """Control the mode with a global enum.""",
+                              cast=Modes,
+                              set_process=lambda v: v.value)
+
+    option = Instrument.control("O?", "O %d", """Control an integer option with an IntEnum.""",
+                                get_process=lambda v: EnumInstrument.Options(v))
+
+    status = Instrument.measurement("STB?", """Measure a bitwise status, returns IntFlag.""",
+                                    cast=int,
+                                    get_process=lambda v: EnumInstrument.Status(v))
+
+    waveform = Instrument.control("WAVE?", "WAVE %s", """Control a waveform with Enum.""",
+                                  set_process=lambda v: v.value,
+                                  get_process=lambda v: EnumInstrument.Waveforms(v))
+
+    waveform2 = Instrument.control("WAVE?", "WAVE %s", """Control a waveform with Enum.""",
+                                   validator=enum_validator,
+                                   get_process=lambda v: EnumInstrument.Waveforms(v))
 
 
 def test_fake_instrument():
@@ -631,3 +687,46 @@ def test_dynamic_property_reading_special_attributes_forbidden():
     generic = GenericInstrument()
     with pytest.raises(AttributeError):
         generic.fake_ctrl_validator
+
+
+class TestEnumEncapsulation:
+    def test_set_global_enum(self):
+        with expected_protocol(EnumInstrument, [("M MV", None)]) as inst:
+            inst.mode = Modes.VOLTAGE
+
+    def test_set_int_enum(self):
+        with expected_protocol(EnumInstrument, [("O 1", None)]) as inst:
+            inst.option = inst.Options.ONE
+
+    def test_set_int_enum_with_int(self):
+        """Use the integer instead of the Enum."""
+        with expected_protocol(EnumInstrument, [("O 1", None)]) as inst:
+            inst.option = 1
+
+    def test_set_str_enum(self):
+        with expected_protocol(EnumInstrument, [("WAVE tr", None)]) as inst:
+            inst.waveform = inst.Waveforms.TRIANGLE
+
+    def test_set_str_enum_validator(self):
+        with expected_protocol(EnumInstrument, [("WAVE tr", None)]) as inst:
+            inst.waveform2 = inst.Waveforms.TRIANGLE
+
+    def test_get_global_enum(self):
+        with expected_protocol(EnumInstrument, [("M?", "MV")]) as inst:
+            assert inst.mode == Modes.VOLTAGE
+
+    def test_get_int_enum(self):
+        with expected_protocol(EnumInstrument, [("O?", "7")]) as inst:
+            assert inst.option == inst.Options.SEVEN
+
+    def test_get_int_flag(self):
+        with expected_protocol(EnumInstrument, [("STB?", "6")]) as inst:
+            assert inst.status == inst.Status.INTERLOCK | inst.Status.OVER_CURRENT
+
+    def test_get_str_enum(self):
+        with expected_protocol(EnumInstrument, [("WAVE?", "sn")]) as inst:
+            assert inst.waveform == inst.Waveforms.SINE
+
+    def test_get_funny_enum(self):
+        with expected_protocol(EnumInstrument, [("T?", "test")]) as inst:
+            assert inst.test == inst.Test.ABC
