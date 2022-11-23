@@ -136,6 +136,10 @@ class EnumInstrument(Instrument, Enums):
                                    validator=enum_validator,
                                    get_process=lambda v: EnumInstrument.Waveforms(v))
 
+    waveform3 = Instrument.control("WAVE?", "WAVE %s", """Control a waveform with Enum.""",
+                                   validator=enum_validator,
+                                   cast=Waveforms)
+
 
 def test_fake_instrument():
     fake = FakeInstrument()
@@ -724,6 +728,10 @@ class TestEnumEncapsulation:
             assert inst.status == inst.Status.INTERLOCK | inst.Status.OVER_CURRENT
 
     def test_get_str_enum(self):
+        with expected_protocol(EnumInstrument, [("WAVE?", "sn")]) as inst:
+            assert inst.waveform == inst.Waveforms.SINE
+
+    def test_get_str_enum_internal_calst(self):
         with expected_protocol(EnumInstrument, [("WAVE?", "sn")]) as inst:
             assert inst.waveform == inst.Waveforms.SINE
 
