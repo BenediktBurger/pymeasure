@@ -91,6 +91,7 @@ class ProtocolAdapter(Adapter):
 
     def _setup_connection(self, connection_attributes, connection_methods):
         self.connection = MagicMock()
+        self.connection.baud_rate = 22000  # to reduce test times with modbus.
         if connection_attributes is not None:
             for key, value in connection_attributes.items():
                 setattr(self.connection, key, value)

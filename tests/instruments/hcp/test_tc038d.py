@@ -27,7 +27,7 @@ import pytest
 from pymeasure.test import expected_protocol
 
 
-from pymeasure.instruments.hcp import TC038D
+from pymeasure.instruments.hcp.tc038dMM import TC038D
 
 
 # Testing the 'write multiple values' method of the device.
@@ -58,7 +58,7 @@ def test_write_values_CRC_error():
     with expected_protocol(
         TC038D,
         [(b"\x01\x10\x01\x06\x00\x02\x04\x00\x00\x01A\xbf\xb5",
-          b"\x01\x10\x01\x06\x00\x02\x01\x02")],
+          b"\x01\x10\x01\x06\x00\x02\x01\xa05")],
     ) as inst:
         with pytest.raises(ConnectionError):
             inst.setpoint = 32.1
