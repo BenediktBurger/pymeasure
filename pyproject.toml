@@ -90,3 +90,7 @@ PYQT5 = true
 PYSIDE2 = false
 PYQT6 = false
 PYSIDE6 = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]

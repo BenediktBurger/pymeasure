@@ -24,18 +24,24 @@
 
 import importlib
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
 from pymeasure import instruments
+from pymeasure.adapters import ProtocolAdapter
 from pymeasure.instruments import Instrument, Channel, generic_types
+
+# Import init communications from common test utils
+# from tests.instruments.common_test_utils import ibeamsmart_init_comm
+from tests.instruments.danfysik.test_danfysik8500 import init_comm as danfysik8500_init_comm
+from tests.instruments.toptica.test_ibeamsmart import init_comm as ibeamsmart_init_comm
+from tests.instruments.ipgphotonics.test_yar import init_comm as yar_init_comm
 
 
 # Collect all instruments
 def find_devices_in_module(module):
-    devices = set()
-    channels = set()
+    devices: set[type[Instrument]] = set()
+    channels: set[type[Channel]] = set()
     base_dir = Path(module.__path__[0])
     base_import = module.__package__ + "."
     for inst_file in Path(base_dir).rglob("*.py"):
@@ -77,7 +83,7 @@ def find_devices_in_module(module):
 devices, channels = find_devices_in_module(instruments)
 
 # Collect all properties
-properties = []
+properties: list[tuple[type[Instrument] | type[Channel], str, property]] = []
 for device in devices.union(channels):
     for property_name in dir(device):
         prop = getattr(device, property_name)
@@ -108,11 +114,35 @@ need_init_communication = [
     "AWG401x_AFG",
     "VARX",
     "HP8116A",
-    "IBeamSmart",
     "ANC300Controller",
     "Keithley2281S",
     "SpellmanXRV",
+    # the following work with mock adapter
+    "TDK_Lambda_Base",
+    "TeledyneMAUI",
+    "AdvantestR3767CG",
+    "AgilentE4980",
+    "ThorlabsPro8000",
+    "LeCroyT3DSO1204",
+    "HP33120A",
+    "TDK_Gen80_65",
+    "AMI430",
+    "AgilentE5062A",
+    "KeithleyDMM6500",
+    "PM6669",
+    "ParkerGV6",
+    "Keithley4200",
+    "TDK_Gen40_38",
+    "Yokogawa7651",
+    "TeledyneOscilloscope",
 ]
+
+# Map instruments to their specific init communication sequences
+instrument_init_comms: dict[str, list] = {
+    "Danfysik8500": danfysik8500_init_comm,
+    "IBeamSmart": ibeamsmart_init_comm,
+    "YAR": yar_init_comm,
+}
 # Instruments whose property docstrings are not YET in accordance with the style (Get, Set, Control)
 grandfathered_docstring_instruments = [
     "Agilent33521A",
@@ -144,7 +174,7 @@ grandfathered_docstring_instruments = [
 
 
 @pytest.mark.parametrize("cls", devices)
-def test_adapter_arg(cls):
+def test_adapter_arg(cls: type[Instrument]):
     "Test that every instrument has adapter as their input argument."
     if cls.__name__ in proper_adapters:
         pytest.skip(f"{cls.__name__} does not accept an Adapter instance.")
@@ -152,15 +182,15 @@ def test_adapter_arg(cls):
         pytest.skip(f"{cls.__name__} requires communication in init.")
     elif cls.__name__ == "Instrument":
         pytest.skip("`Instrument` requires a `name` parameter.")
-    cls(adapter=MagicMock())
+    cls(adapter=ProtocolAdapter(instrument_init_comms.get(cls.__name__)), name="test")
 
 
 @pytest.mark.parametrize("cls", devices)
-def test_name_argument(cls):
+def test_name_argument(cls: type[Instrument]):
     "Test that every instrument accepts a name argument."
     if cls.__name__ in (*proper_adapters, *need_init_communication):
         pytest.skip(f"{cls.__name__} cannot be tested without communication.")
-    inst = cls(adapter=MagicMock(), name="Name_Test")
+    inst = cls(adapter=ProtocolAdapter(instrument_init_comms.get(cls.__name__)), name="Name_Test")
     assert inst.name == "Name_Test"
 
 
@@ -173,7 +203,7 @@ is_pyvisa_sim_not_installed = not bool(importlib.util.find_spec("pyvisa_sim"))
     is_pyvisa_sim_not_installed, reason="PyVISA tests require the pyvisa-sim library"
 )
 @pytest.mark.parametrize("cls", devices)
-def test_kwargs_to_adapter(cls):
+def test_kwargs_to_adapter(cls: type[Instrument]):
     """Verify that kwargs are accepted and handed to the adapter."""
     if cls.__name__ in (*proper_adapters, *need_init_communication):
         pytest.skip(f"{cls.__name__} cannot be tested without communication.")
@@ -183,20 +213,20 @@ def test_kwargs_to_adapter(cls):
     with pytest.raises(
         ValueError, match="'kwarg_test' is not a valid attribute for type SerialInstrument"
     ):
-        cls(SIM_RESOURCE, visa_library="@sim", kwarg_test=True)
+        cls(SIM_RESOURCE, visa_library="@sim", kwarg_test=True, name="test")
 
 
 @pytest.mark.parametrize("cls", devices)
 @pytest.mark.filterwarnings(
     "error:It is deprecated to specify `includeSCPI` implicitly:FutureWarning"
 )
-def test_includeSCPI_explicitly_set(cls):
+def test_includeSCPI_explicitly_set(cls: type[Instrument]):
     if cls.__name__ in (*proper_adapters, *need_init_communication):
         pytest.skip(f"{cls.__name__} cannot be tested without communication.")
     elif cls.__name__ == "Instrument":
         pytest.skip("`Instrument` requires a `name` parameter.")
 
-    cls(adapter=MagicMock())
+    cls(adapter=ProtocolAdapter(instrument_init_comms.get(cls.__name__)), name="test")
     # assert that no error is raised
 
 
@@ -204,13 +234,13 @@ def test_includeSCPI_explicitly_set(cls):
 @pytest.mark.filterwarnings(
     "error:Defining SCPI base functionality with `includeSCPI=True` is deprecated:FutureWarning"
 )
-def test_includeSCPI_not_set_to_True(cls):
+def test_includeSCPI_not_set_to_True(cls: type[Instrument]):
     if cls.__name__ in (*proper_adapters, *need_init_communication):
         pytest.skip(f"{cls.__name__} cannot be tested without communication.")
     elif cls.__name__ == "Instrument":
         pytest.skip("`Instrument` requires a `name` parameter.")
 
-    cls(adapter=MagicMock())
+    cls(adapter=ProtocolAdapter(instrument_init_comms.get(cls.__name__)), name="test")
     # assert that no error is raised
 
 
@@ -221,10 +251,11 @@ def property_name_to_id(value):
 
 
 @pytest.mark.parametrize("prop_set", properties, ids=property_name_to_id)
-def test_property_docstrings(prop_set):
+def test_property_docstrings(prop_set: tuple[type[Instrument] | type[Channel], str, property]):
     device, property_name, prop = prop_set
     if device.__name__ in grandfathered_docstring_instruments:
         pytest.skip(f"{device.__name__} is in the codebase and has to be refactored later on.")
+    assert isinstance(prop.__doc__, str), f"'{device.__name__}.{property_name}' should have a docstring."
     start = prop.__doc__.split(maxsplit=1)[0]
     assert start in ("Control", "Measure", "Set", "Get"), (
         f"'{device.__name__}.{property_name}' docstring does start with '{start}', not 'Control', "
